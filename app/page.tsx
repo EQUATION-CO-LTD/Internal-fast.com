@@ -26,13 +26,13 @@ export default function Home() {
     return measurements.reduce((a, b) => a + b, 0) / measurements.length;
   };
 
-  // Measure download speed with multiple connections
+  // Measure download speed with multiple connections using static files
   const measureDownload = async (
     onProgress: (speed: number) => void
   ): Promise<number> => {
-    const testDuration = 8000; // 8 seconds test
-    const numConnections = 6; // More parallel connections
-    const chunkSize = 10; // 10MB per chunk
+    const testDuration = 10000; // 10 seconds test
+    const numConnections = 6; // Parallel connections
+    const testFiles = ['/test-data/10mb.bin', '/test-data/25mb.bin']; // Rotate between files
 
     let totalBytes = 0;
     let lastUpdate = 0;
@@ -44,10 +44,14 @@ export default function Home() {
       isRunning = false;
     }, testDuration);
 
-    const downloadChunk = async (): Promise<void> => {
+    const downloadChunk = async (connectionId: number): Promise<void> => {
+      let fileIndex = connectionId % testFiles.length;
+
       while (isRunning) {
         try {
-          const response = await fetch(`/api/download?size=${chunkSize}`, {
+          // Rotate files to avoid caching
+          const fileUrl = testFiles[fileIndex] + `?t=${Date.now()}_${connectionId}`;
+          const response = await fetch(fileUrl, {
             cache: "no-store",
           });
 
@@ -78,6 +82,9 @@ export default function Home() {
           } catch (e) {
             // Ignore cancel errors
           }
+
+          // Move to next file
+          fileIndex = (fileIndex + 1) % testFiles.length;
         } catch (error) {
           console.error("Download chunk error:", error);
           break;
@@ -86,7 +93,7 @@ export default function Home() {
     };
 
     // Start multiple parallel downloads
-    const downloads = Array(numConnections).fill(null).map(() => downloadChunk());
+    const downloads = Array(numConnections).fill(null).map((_, i) => downloadChunk(i));
     await Promise.all(downloads);
 
     // Calculate final average speed
@@ -368,8 +375,8 @@ export default function Home() {
             color: '#9ca3af',
             fontStyle: 'italic'
           }}>
-            ※ localhostでの測定はサーバー処理速度を測定しています。<br />
-            実際のインターネット速度を測定するには本番環境へのデプロイが必要です。
+            ※ 静的ファイルを使用して純粋なネットワーク転送速度を測定します。<br />
+            より正確な測定には本番環境（Vercel等）へのデプロイを推奨します。
           </p>
         </div>
       </div>
